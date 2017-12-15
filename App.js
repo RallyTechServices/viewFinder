@@ -139,7 +139,8 @@ Ext.define('CustomApp', {
             })
         );
         var promises = [];
-        Ext.Array.each(values, function(value){
+
+        Ext.Array.each(values, function(value,idx){
             if ( Ext.isEmpty(value) || !Ext.isString(value) ) {
                 return;
             }
@@ -149,6 +150,7 @@ Ext.define('CustomApp', {
             var uuid = splitted[2];
             promises.push(
                 function() {
+                    console.log(idx);
                     return this._getItem(value,type,uuid,saved_filters);
                 }
             );

@@ -133,6 +133,11 @@ Ext.define('CustomApp', {
 
         var deferred = Ext.create('Deft.Deferred');
         console.log('_populateReferenceValues');
+        Ext.Array.each(saved_filters, function(filter){
+            if ( filter.value == "/none/-1" ) {
+                filter.value = "-- No Entry --";
+            }
+        });
         var values = Ext.Array.unique(
             Ext.Array.map(saved_filters, function(filter){
                 return filter.value;
@@ -150,7 +155,6 @@ Ext.define('CustomApp', {
             var uuid = splitted[2];
             promises.push(
                 function() {
-                    console.log(idx);
                     return this._getItem(value,type,uuid,saved_filters);
                 }
             );

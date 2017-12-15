@@ -32,7 +32,6 @@ Ext.define('CustomApp', {
                 Deft.Chain.sequence(promises, this).then({
                     scope: this,
                     success: function(results){
-                        console.log(results);
                         var attribute_hash = {};
                         Ext.Array.each(results, function(result){
                             Ext.Array.each(result, function(attribute){
@@ -54,7 +53,6 @@ Ext.define('CustomApp', {
             fetch: ['ElementName'],
             //callback: function(records, operation, success) {
             callback: function(records) {
-                console.log('attributes', records);
                 deferred.resolve(records);
             }
         });
@@ -62,7 +60,6 @@ Ext.define('CustomApp', {
     },
 
     _getViewPreferences: function() {
-        console.log(this.getContext().getUser());
         var user_filters = Rally.data.wsapi.Filter.or([
             {property:'User',value:null},
             {property:'User',value:this.getContext().getUser()._ref}
@@ -87,7 +84,9 @@ Ext.define('CustomApp', {
             callback: this._getFiltersFromPrefs
         });
     },
+
     _getFiltersFromPrefs: function(prefs) {
+        console.log('_getFiltersFromPrefs');
         var saved_filters = [];
         Ext.Array.each ( prefs, function(record){
             var name = record.get('Name');
@@ -115,18 +114,25 @@ Ext.define('CustomApp', {
                     });
                 });
             }
-            console.log(value);
+            console.log('value:', value);
         });
+
         this._populateReferenceValues(saved_filters).then({
             scope: this,
             success: function(populated_values) {
                 this._makeGrid(populated_values);
+            },
+            failure: function(msg) {
+                alert(msg);
+                this.setLoading(false);
             }
         });
     },
 
     _populateReferenceValues:function(saved_filters){
+
         var deferred = Ext.create('Deft.Deferred');
+        console.log('_populateReferenceValues');
         var values = Ext.Array.unique(
             Ext.Array.map(saved_filters, function(filter){
                 return filter.value;
@@ -141,7 +147,6 @@ Ext.define('CustomApp', {
             if ( splitted.length !== 3 ) { return; }
             var type = splitted[1];
             var uuid = splitted[2];
-            console.log(type,uuid);
             promises.push(
                 function() {
                     return this._getItem(value,type,uuid,saved_filters);
@@ -150,8 +155,11 @@ Ext.define('CustomApp', {
         },this);
         Deft.Chain.sequence(promises,this).then({
             success: function(result) {
-                console.log('result', result);
+                console.log('back from chain of hydration');
                 deferred.resolve(saved_filters);
+            },
+            failure: function(msg) {
+                deferred.reject(msg);
             }
         });
         return deferred.promise;
@@ -159,22 +167,25 @@ Ext.define('CustomApp', {
 
     _getItem: function(value,type,uuid,saved_filters) {
         var deferred = Ext.create('Deft.Deferred');
+        console.log('_getItem',type,value);
         Rally.data.ModelFactory.getModel({
             type: type,
             success: function(model) {
                 //Use the model here
                 model.load(uuid, {
-                    fetch: ['ObjectID'],
+                    fetch: ['ObjectID','StringValue'],
                     callback: function(result, operation) {
                         if(operation.wasSuccessful()) {
-                            var name = result.get('_refObjectName');
-                            if ( name ) {
+                            var name = result.get('_refObjectName') || result.get('StringValue');
+                            if ( !Ext.isEmpty(name) ) {
                                 Ext.Array.each(saved_filters, function(filter){
                                     if ( filter.value == value ) {
                                         filter.value = name;
                                     }
                                 });
                             }
+                        } else {
+                            console.log(operation);
                         }
                         deferred.resolve();
                     }
@@ -189,6 +200,7 @@ Ext.define('CustomApp', {
     },
 
     _makeGrid: function(records){
+        console.log('done with data, preparing grid');
         Ext.Array.each(records, function(record){
             if ( record.property && this.attributes_by_uuid[record.property] ) {
                 record.property = this.attributes_by_uuid[record.property];

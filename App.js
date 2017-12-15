@@ -3,12 +3,13 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     layout:'border',
     items: [
-        {xtype:'container',itemId:'grid_box',height:'100%',region:'center',margin: 5,layout:'fit'}
+        {xtype:'container',itemId:'grid_box',region:'center',padding: 5,layout:'fit'}
     ],
 
     attributes_by_uuid: {},
 
     launch: function() {
+        this.setLoading();
         this._getAttributes();
     },
 
@@ -23,6 +24,7 @@ Ext.define('CustomApp', {
             scope: this,
             callback: function(records,operation){
                 console.log(records,operation);
+                this.setLoading('Loading data');
                 var promises = Ext.Array.map(records, function(record){
                     return function() { return me._getAttributesFromTypeDefinition(record); };
                 });
@@ -90,7 +92,6 @@ Ext.define('CustomApp', {
         Ext.Array.each ( prefs, function(record){
             var name = record.get('Name');
             var value = record.get('Value');
-            console.log(name);
             if ( value !== "" ) {
                 value = JSON.parse(value);
                 var advanced_filters = value.advancedFilters || [];
@@ -116,7 +117,72 @@ Ext.define('CustomApp', {
             }
             console.log(value);
         });
-        this._makeGrid(saved_filters);
+        this._populateReferenceValues(saved_filters).then({
+            scope: this,
+            success: function(populated_values) {
+                this._makeGrid(populated_values);
+            }
+        });
+    },
+
+    _populateReferenceValues:function(saved_filters){
+        var deferred = Ext.create('Deft.Deferred');
+        var values = Ext.Array.unique(
+            Ext.Array.map(saved_filters, function(filter){
+                return filter.value;
+            })
+        );
+        var promises = [];
+        Ext.Array.each(values, function(value){
+            var splitted = value.split('/');
+            if ( splitted.length !== 3 ) { return; }
+            var type = splitted[1];
+            var uuid = splitted[2];
+            console.log(type,uuid);
+            promises.push(
+                function() {
+                    return this._getItem(value,type,uuid,saved_filters);
+                }
+            );
+        },this);
+        Deft.Chain.sequence(promises,this).then({
+            success: function(result) {
+                console.log('result', result);
+                deferred.resolve(saved_filters);
+            }
+        });
+        return deferred.promise;
+    },
+
+    _getItem: function(value,type,uuid,saved_filters) {
+        var deferred = Ext.create('Deft.Deferred');
+        Rally.data.ModelFactory.getModel({
+            type: type,
+            success: function(model) {
+                //Use the model here
+                model.load(uuid, {
+                    fetch: ['ObjectID'],
+                    callback: function(result, operation) {
+                        if(operation.wasSuccessful()) {
+                            var name = result.get('_refObjectName');
+                            if ( name ) {
+                                Ext.Array.each(saved_filters, function(filter){
+                                    if ( filter.value == value ) {
+                                        filter.value = name;
+                                    }
+                                });
+                            }
+                        }
+                        deferred.resolve();
+                    }
+                });
+            },
+            failure: function(msg) {
+                console.log(msg);
+                deferred.resolve();
+            }
+        });
+        return deferred.promise;
     },
 
     _makeGrid: function(records){
@@ -134,8 +200,12 @@ Ext.define('CustomApp', {
             xtype:'rallygrid',
             store: store,
             showRowActionsColumn: false,
-            columnCfgs: this._getColumns()
+            columnCfgs: this._getColumns(),
+            pagingToolbarCfg: {
+                pageSizes: [25, 50, 100, 200, 500, 1000]
+            }
         });
+        this.setLoading(false);
     },
 
     _getColumns: function() {

@@ -134,6 +134,9 @@ Ext.define('CustomApp', {
         );
         var promises = [];
         Ext.Array.each(values, function(value){
+            if ( Ext.isEmpty(value) || !Ext.isString(value) ) {
+                return;
+            }
             var splitted = value.split('/');
             if ( splitted.length !== 3 ) { return; }
             var type = splitted[1];
